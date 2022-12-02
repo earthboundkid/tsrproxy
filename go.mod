@@ -3,6 +3,7 @@ module github.com/carlmjohnson/tsrproxy
 go 1.19
 
 require (
+	github.com/carlmjohnson/flagx v0.22.2
 	github.com/carlmjohnson/versioninfo v0.22.4
 	tailscale.com v1.32.3
 )

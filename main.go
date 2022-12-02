@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 
+	"github.com/carlmjohnson/flagx"
 	"github.com/carlmjohnson/versioninfo"
 	"tailscale.com/tsnet"
 )
@@ -18,6 +21,8 @@ import (
 var (
 	addr     = flag.String("addr", ":443", "address to listen on")
 	hostname = flag.String("hostname", "tsrproxy", "hostname for the reverse proxy")
+	authkey  = flag.String("authkey", os.Getenv("TS_AUTHKEY"), "`key` for proxy server")
+	verbose  = flag.Bool("verbose", false, "log Tailscale output")
 	rpURL    *url.URL
 )
 
@@ -32,9 +37,29 @@ func init() {
 
 func main() {
 	flag.Parse()
+	flagx.ParseEnv(nil, "tsrproxy")
+	if rpURL == nil {
+		flag.Usage()
+		log.Fatal("-proxy required")
+	}
+
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	dir = filepath.Join(dir, "tsnet-tsrproxy-"+*hostname)
+	_ = os.MkdirAll(dir, 0o700)
+
+	logf := func(format string, args ...any) {}
+	if *verbose {
+		logf = nil
+	}
+
 	s := &tsnet.Server{
+		Dir:      dir,
 		Hostname: *hostname,
-		Logf:     func(format string, args ...any) {},
+		AuthKey:  *authkey,
+		Logf:     logf,
 	}
 	ln, err := s.Listen("tcp", *addr)
 	if err != nil {
@@ -52,7 +77,7 @@ func main() {
 			GetCertificate: lc.GetCertificate,
 		})
 	}
-	log.Printf("started %s%s proxing to %v",
+	log.Printf("starting %s%s proxing to %v",
 		*hostname, *addr, rpURL)
 
 	log.Fatal(http.Serve(ln, httputil.NewSingleHostReverseProxy(rpURL)))
