@@ -6,6 +6,8 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -79,8 +81,14 @@ func main() {
 			GetCertificate: lc.GetCertificate,
 		})
 	}
+	rp := httputil.NewSingleHostReverseProxy(rpURL)
+	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprintf(w, "<h1>Bad Request</h1><p>%s</p>",
+			html.EscapeString(err.Error()))
+	}
 	log.Printf("starting %s%s proxing to %v",
 		*hostname, *addr, rpURL)
-
-	log.Fatal(http.Serve(ln, httputil.NewSingleHostReverseProxy(rpURL)))
+	log.Fatal(http.Serve(ln, rp))
 }
