@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	addr     = flag.String("addr", ":443", "address to listen on")
+	addr     = flag.String("addr", ":https", "address to listen on")
 	hostname = flag.String("hostname", "tsrproxy", "hostname for the reverse proxy")
 	authkey  = flag.String("authkey", os.Getenv("TS_AUTHKEY"), "`key` for proxy server")
 	verbose  = flag.Bool("verbose", false, "log Tailscale output")
@@ -71,15 +71,16 @@ func main() {
 	}
 	defer ln.Close()
 
-	lc, err := s.LocalClient()
-	if err != nil {
-		log.Fatal(err)
-	}
+	if *addr == ":443" || *addr == ":https" {
+		lc, err := s.LocalClient()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	if *addr == ":443" {
 		ln = tls.NewListener(ln, &tls.Config{
 			GetCertificate: lc.GetCertificate,
 		})
+		go redirectHTTP(s)
 	}
 	rp := httputil.NewSingleHostReverseProxy(rpURL)
 	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
@@ -91,4 +92,18 @@ func main() {
 	log.Printf("starting %s%s proxing to %v",
 		*hostname, *addr, rpURL)
 	log.Fatal(http.Serve(ln, rp))
+}
+
+func redirectHTTP(s *tsnet.Server) {
+	ln, err := s.Listen("tcp", ":http")
+	if err != nil {
+		log.Print("could not listen for HTTP redirect")
+		return
+	}
+	http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u := *r.URL
+		u.Scheme = "https"
+		u.Host = r.Host
+		http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+	}))
 }
