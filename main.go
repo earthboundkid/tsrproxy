@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/carlmjohnson/flagx"
 	"github.com/carlmjohnson/versioninfo"
@@ -27,6 +28,7 @@ var (
 )
 
 func init() {
+	flag.DurationVar(&http.DefaultClient.Timeout, "timeout", 2*time.Second, "timeout for connecting to backend")
 	versioninfo.AddFlag(nil)
 	flag.Func("proxy", "`url` to reverse proxy", func(s string) error {
 		var err error
